@@ -6,3 +6,4 @@ import mr.developer.bazaar
 import mr.developer.filesystem
 import mr.developer.cvs
 import mr.developer.darcs
+import mr.developer.tf

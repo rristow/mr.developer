@@ -9,6 +9,8 @@ Changelog
 
 * Fixed some exceptions occurring when using with Python 3. [icemac]
 
+* Added support for microsoft team foundation [rristow]
+
 1.21 - 2012-04-11
 -----------------
 

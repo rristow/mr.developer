@@ -63,7 +63,7 @@ Where individual parts are:
 
 ``kind``
   The kind of repository. Currently supported are ``svn``,
-  ``hg``, ``git``, ``bzr``, ``darcs``, ``cvs``, or ``fs``.
+  ``hg``, ``git``, ``bzr``, ``darcs``, ``cvs``, ``tf`` or ``fs``.
 
 ``url``
   The location of the repository. This value is specific to the version
