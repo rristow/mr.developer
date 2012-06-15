@@ -1,13 +1,7 @@
 from mr.developer import common
 import platform
-
-try:
-    import xml.etree.ElementTree as etree
-except ImportError:
-    import elementtree.ElementTree as etree
 import getpass
 import os
-import re
 import subprocess
 import sys
 
@@ -43,6 +37,8 @@ STDOUT_EXP_GET_PREVIEW_OK = "All files up to date"
 class TFWorkingCopy(common.BaseWorkingCopy):
     _tf_properties_cache = {}
     _tf_auth_cache = {}
+    #TODO: delete debug information 
+    DB=True
 
     def __init__(self, *args, **kwargs):
         common.BaseWorkingCopy.__init__(self, *args, **kwargs)
@@ -60,9 +56,6 @@ class TFWorkingCopy(common.BaseWorkingCopy):
                Server path:   $/REP/pro_test ")
         ({'Local path': '/prod_test'},   {'Server path': '$/REP/pro_test'})
         """
-        
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' _tf_parse_properties '
         local = {}
         server = {}
         if 'Server information:' in str:
@@ -85,8 +78,6 @@ class TFWorkingCopy(common.BaseWorkingCopy):
             raise TFParserError("Expected 'Server information:'")
 
     def _tf_check_executable(self):
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' _tf_check_executable '
         try:
             cmd = subprocess.Popen([TF, "-h"],
                                    stdout=subprocess.PIPE,
@@ -100,24 +91,23 @@ class TFWorkingCopy(common.BaseWorkingCopy):
     def _tf_auth_get(self, workspace):
         """ Get the credentials from local/temporary cache.
         """
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' _tf_auth_get '
         for workspace_cache in self._tf_auth_cache:
             if  workspace_cache == workspace:
                 return self._tf_auth_cache[workspace]
 
     def _tf_error_wrapper(self, f, **kwargs):
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' _tf_error_wrapper '
+        """ Execute the function "f". If a "TFAuthorizationError" occurs 
+            than ask for the password an try again. 
+        """
         count = 4
+        usr_default = ''
         while count:
             count = count - 1
             try:
                 return f(**kwargs)
-            except TFAuthorizationError, e:
-                lines = e.args[0].split('\n')
+            except TFAuthorizationError:
+                if self.DB: logger.debug("TFAuthorizationError")
                 workspace = self.source.get('workspace', '')
-                #TODO: after, before???
                 before = self._tf_auth_cache.get(workspace)
                 common.output_lock.acquire()
                 common.input_lock.acquire()
@@ -128,11 +118,19 @@ class TFWorkingCopy(common.BaseWorkingCopy):
                     common.output_lock.release()
                     continue
                 print "Authorization needed for '%s' at '%s'" % (self.source['name'], self.source['url'])
-                user = raw_input("Username (DOMAIN\username or username@domain): ")
-                if not user:
-                    #todo: remove this 
-		    user='rodrigo.ristow@adm.ds.fhnw.ch'
-                    #raise TFError("Authentication credentials were not provided")
+                #Try to get the default username from sources (login argument)
+                if usr_default=='' and self.source.get('login', ''):
+                    usr_default=self.source['login'].split(",")[0]
+                if usr_default:
+                    user = raw_input("Username (DOMAIN\username or username@domain) [%s]: "%usr_default)
+                    if user == '':
+                        user = usr_default
+                else:
+                    user = raw_input("Username (DOMAIN\username or username@domain):")
+                if user:
+                    usr_default = user
+                else:
+                    raise TFError("Authentication credentials were not provided")
                 passwd = getpass.getpass("Password: ")
                 self._tf_auth_cache[workspace] = dict(
                     user=user,
@@ -144,8 +142,6 @@ class TFWorkingCopy(common.BaseWorkingCopy):
     def _tf_workfold_unmap(self, **kwargs):
         """ Unmapp a local folder.
         """
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' _tf_workfold_unmap '
         name = self.source['name']
         path = self.source['path']
 
@@ -154,12 +150,12 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         self._tf_append_argument(args,['workspace','profile','login'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
-            raise TFError("'tf workfold -unmap' for '%s' failed.\n%s" % (name, stderr))
+            raise TFError("'tf workfold -unmap' command for '%s' failed.\n%s" % (name, stderr))
         if kwargs.get('verbose', False):
             return stdout
 
     def _tf_append_argument(self, args, arg_ids, pos=2):
-	""" Append (if exists) all arguments in the "arg_ids" list 
+        """ Append (if exists) all arguments in the "arg_ids" list 
             into args.
         """
         for arg_id in arg_ids:
@@ -169,8 +165,6 @@ class TFWorkingCopy(common.BaseWorkingCopy):
     def _tf_workfold(self, **kwargs):
         """ Mapp a local folder.
         """
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' _tf_workfold '
         name = self.source['name']
         path = self.source['path']
         url = self.source['url']
@@ -180,18 +174,17 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         self._tf_append_argument(args,['workspace','profile','login'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
-            raise TFError("'tf workfold' for '%s' failed.\n%s" % (name, stderr))
+            raise TFError("'tf workfold' command for '%s' failed.\n%s" % (name, stderr))
         if kwargs.get('verbose', False):
             return stdout
 
     def _tf_checkout(self, **kwargs):
         """ Mapp a local folder and get from server.
         """
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' _tf_checkout '
         name = self.source['name']
         path = self.source['path']
         url = self.source['url']
+        if self.DB: logger.debug("  Checking informations (tf properties) from '%s'"%path)
         info = self._tf_properties(**kwargs)
 
         # Verify the mapping
@@ -200,15 +193,17 @@ class TFWorkingCopy(common.BaseWorkingCopy):
             if info['url'] != url:
                 raise TFError("The path '%s' is already mapped to '%s'."%(path,info['url']))
         else:
+            if self.DB: logger.debug("  Mapping (tf workfold) '%s' with the repository"%name)
             self._tf_workfold(**kwargs)
 
         # Get content from server
         # Mapping the local folder
         args = [TF, "get", "-recursive", path]
         self._tf_append_argument(args,['profile','login','version'])
+        if self.DB: logger.debug("  Synchronizing (tf get) with the repository")
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
-            raise TFError("'tf get' for '%s' failed.\n%s" % (name, stderr))
+            raise TFError("'tf get' command for '%s' failed.\n%s" % (name, stderr))
         if kwargs.get('verbose', False):
             return stdout
 
@@ -217,27 +212,16 @@ class TFWorkingCopy(common.BaseWorkingCopy):
               -noprompt
               -username (if already in cache)
         """
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' _tf_communicate '
         workspace = self.source.get('workspace', '')
         auth = self._tf_auth_get(workspace)
         if auth is not None:
             args[2:2] = ["-login:%s,%s"%(auth.get('user',''),auth.get('passwd',''))]
-#        accept_invalid_cert = self._tf_accept_invalid_cert_get(url)
-#        if 'always_accept_server_certificate' in kwargs:
-#            if kwargs['always_accept_server_certificate']:
-#                accept_invalid_cert = True
-#        if accept_invalid_cert is True:
-#            args[2:2] = ["--trust-server-cert"]
-#        elif accept_invalid_cert is False:
-#            raise TFCertificateRejectedError("Server certificate rejected by user.")
-#        args[2:2] = ["--no-auth-cache"]
-#        interactive_args = args[:]
         args[2:2] = ["-noprompt"]
 
-        #TODO: Remove this
-        ret = ' '.join(args)
-        print "(DEBUG  TF)  >> ",ret.replace(auth and auth.get('passwd','') or 'nothing','<hidden>')
+        if self.DB: 
+            ret = ' '.join(args)
+            logger.debug("    >> %s"%ret.replace(auth and auth.get('passwd','') or 'nothing','<hidden>'))
+
         cmd = subprocess.Popen(args,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
@@ -261,14 +245,12 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         Return:
 
         """
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' _tf_properties '
         name = self.source['name']
         if name in self._tf_properties_cache:
             return self._tf_properties_cache[name]
         path = self.source['path']
         
-        args = [TF, "properties", path]        
+        args = [TF, "properties", path]
         self._tf_append_argument(args,['workspace','profile','login'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         result = {}
@@ -288,68 +270,47 @@ class TFWorkingCopy(common.BaseWorkingCopy):
             self._tf_properties_cache[name] = result
         return result
 
-    def _tf_switch(self, **kwargs):
-        """ Remove the mapping with the local folder and map/update it again
-        in the new location.
-        """
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' _tf_switch '
-        name = self.source['name']
-        path = self.source['path']
-        url = self.source['url']
-
-        # Change the mapping:
-        self._tf_workfold_unmap(**kwargs)
-        return self._tf_checkout(**kwargs)
-
     def _tf_update(self, **kwargs):
         """ Retrieves a copy from the server.
         tf syntax:
         tf get [itemspec] [/version:versionspec] [/all] [/overwrite] [/force]
         [/preview] [/recursive] [/remap] [/noprompt] [/login:username,[password]]
         """
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' _tf_update '
         name = self.source['name']
         path = self.source['path']
-        url = self.source['url']
 
         args = [TF, "get", "-recursive", path]
         self._tf_append_argument(args,['profile','login','version'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
-            raise TFError("tf get of '%s' failed.\n%s" % (name, stderr))
+            raise TFError("'tf get' command for '%s' failed.\n%s" % (name, stderr))
         if kwargs.get('verbose', False):
             return stdout
 
     def tf_checkout(self, **kwargs):
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' tf_checkout '
         name = self.source['name']
         path = self.source['path']
         if os.path.exists(path):
             self.output((logger.info, "Skipped checkout of existing package '%s'." % name))
             return
-        self.output((logger.info, "Checked out '%s' with microsoft team foundation." % name))
+        self.output((logger.info, "Checked out '%s' with Microsoft team foundation." % name))
         return self._tf_error_wrapper(self._tf_checkout, **kwargs)
 
     def tf_switch(self, **kwargs):
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' tf_switch '
-        name = self.source['name']
-        self.output((logger.info, "Switched '%s' with microsoft team foundation." % name))
-        return self._tf_error_wrapper(self._tf_switch, **kwargs)
+        """ Remove the mapping with the local folder and map/update it again
+        in the new location.
+        """
+        if self.DB: logger.debug("  Executing 'switch' (tf workfold 'unmap' and 'map' again).")
+        self._tf_workfold_unmap(**kwargs)
+        return self._tf_checkout(**kwargs)
 
     def tf_update(self, **kwargs):
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' tf_update '
         name = self.source['name']
-        self.output((logger.info, "Updated '%s' with microsoft team foundation." % name))
+        self.output((logger.info, "Updated '%s' with Microsoft team foundation." % name))
         return self._tf_error_wrapper(self._tf_update, **kwargs)
 
     def checkout(self, **kwargs):
-        #TODO: Remove this
-        print "(DEBUG  TF)#", ' checkout '
+        if self.DB: logger.debug("Executing checkout.")
         name = self.source['name']
         path = self.source['path']
         update = self.should_update(**kwargs)
@@ -372,77 +333,63 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         """
         Check/preview changes from local folder.
         """
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' _tf_preview_clean '
         name = self.source['name']
         path = self.source['path']
-        url = self.source['url']
 
         # get from server
         args = [TF, "get", "-preview", "-recursive", path]
         self._tf_append_argument(args,['profile','login','version'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
-            raise TFError("'tf get -preview' for '%s' failed.\n%s" % (name, stderr))
+            raise TFError("'tf get -preview' command for '%s' failed.\n%s" % (name, stderr))
         return STDOUT_EXP_GET_PREVIEW_OK in stdout
 
     def matches(self, **kwargs):
-        #TODO: Remove this
-        print "(DEBUG  TF)#", ' matches >'
-
+        if self.DB: logger.debug("Executing matches.")
         props = self._tf_error_wrapper(self._tf_properties, **kwargs)
         if props:
             preview_clean = self._tf_error_wrapper(self._tf_preview_clean, **kwargs)
-            url = self.source['url']
-            ret = info.get('url') == url and preview_clean
+            if self.DB: logger.debug(preview_clean and "  The 'URL' matches with repository (checked with: tf properties)" or "  The 'URL' do NOT match with repository (checked with: tf properties)")
+            if self.DB: logger.debug(preview_clean and "  The files are updated (checked with: tf get -preview)" or "  The files are NOT updated (checked with: tf get -preview)")
+            ret = props.get('url') == self.source['url'] and preview_clean
         else:
             # No properties (folder is not mapped)
+            if self.DB: logger.debug(preview_clean and "  It was not possible to check the properties. (tf properties)")
             ret = False
-        print "(DEBUG  TF)#", ' matches < return:',ret
+        if self.DB: logger.debug("matches return: '%s'"%ret)
         return ret
 
     def _tf_status_clean(self, **kwargs):
         """
         Check/preview changes from local folder.
         """
-        #TODO: Remove this
-        print "(DEBUG  TF)  ", ' _tf_status_clean '
         name = self.source['name']
         path = self.source['path']
 
-        # get from server
         args = [TF, "status", "-recursive", path]
-        self._tf_append_argument(args,['workspace','profile','login'])        
+        self._tf_append_argument(args,['workspace','profile','login'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
 
         if returncode != 0:
-            raise TFError("'tf status' for '%s' failed.\n%s" % (name, stderr))
+            raise TFError("'tf status' command for '%s' failed.\n%s" % (name, stderr))
         return STDOUT_EXP_STATUS_OK in stdout, stdout
 
-    def deactivate(self, **kwargs):
-        print "OK"
-        import pdb; pdb.set-trace()
-
     def status(self, **kwargs):
-        #TODO: Remove this
-        print "(DEBUG  TF)#", ' status >'
+        if self.DB: logger.debug("Executing status.")
         clean, stdout = self._tf_error_wrapper(self._tf_status_clean, **kwargs)
 
         if clean:
             status = 'clean'
         else:
             status = 'dirty'
-
-	print "(DEBUG  TF)#", ' status < return:',status
+        if self.DB: logger.debug("status return: %s."%status)
         if kwargs.get('verbose', False):
             return status, stdout
         else:
             return status
 
     def update(self, **kwargs):
-        #TODO: Remove this
-        print "(DEBUG  TF)#", ' update '
-        name = self.source['name']
+        if self.DB: logger.debug("Executing update")
         force = kwargs.get('force', False)
         status = self.status()
         #Switch
@@ -452,9 +399,6 @@ class TFWorkingCopy(common.BaseWorkingCopy):
             else:
                 raise TFError("It was not possibel to switch '%s' to the new location."
                               "There are uncommited changes") 
-#        always update an maintain local changes
-#        if status != 'clean' and not force:
-#            raise TFError("Update aborted!  upCan't update package '%s' because it has local changes ()." % name)
         #Update
         return self.tf_update(**kwargs)
 
