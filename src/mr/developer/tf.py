@@ -24,7 +24,8 @@ class TFParserError(TFError):
 # --- Standard output 'expressions' of tf client ---
 
 # The item_spec (folder) is not mapped to the server
-STDOUT_EXP_UNMAPPED = 'must be a server item'
+STDOUT_EXP_UNMAPPED_PROPS = 'must be a server item'
+STDOUT_EXP_UNMAPPED_STATUS = 'There is no working folder mapping'
 # No Authentication provided (no argument: profile or user)
 STDOUT_EXP_AUTHENTICATION_NOT_PROVIDED = 'Authentication credentials were not explicitly provided'
 # Wrong password
@@ -37,7 +38,7 @@ STDOUT_EXP_GET_PREVIEW_OK = "All files up to date"
 class TFWorkingCopy(common.BaseWorkingCopy):
     _tf_properties_cache = {}
     _tf_auth_cache = {}
-    #TODO: delete debug information 
+    #TODO: delete debug information
     DB=True
 
     def __init__(self, *args, **kwargs):
@@ -96,8 +97,8 @@ class TFWorkingCopy(common.BaseWorkingCopy):
                 return self._tf_auth_cache[workspace]
 
     def _tf_error_wrapper(self, f, **kwargs):
-        """ Execute the function "f". If a "TFAuthorizationError" occurs 
-            than ask for the password an try again. 
+        """ Execute the function "f". If a "TFAuthorizationError" occurs
+            than ask for the password an try again.
         """
         count = 4
         usr_default = ''
@@ -106,7 +107,6 @@ class TFWorkingCopy(common.BaseWorkingCopy):
             try:
                 return f(**kwargs)
             except TFAuthorizationError:
-                if self.DB: logger.debug("TFAuthorizationError")
                 workspace = self.source.get('workspace', '')
                 before = self._tf_auth_cache.get(workspace)
                 common.output_lock.acquire()
@@ -117,27 +117,30 @@ class TFWorkingCopy(common.BaseWorkingCopy):
                     common.input_lock.release()
                     common.output_lock.release()
                     continue
-                print "Authorization needed for '%s' at '%s'" % (self.source['name'], self.source['url'])
-                #Try to get the default username from sources (login argument)
-                if usr_default=='' and self.source.get('login', ''):
-                    usr_default=self.source['login'].split(",")[0]
-                if usr_default:
-                    user = raw_input("Username (DOMAIN\username or username@domain) [%s]: "%usr_default)
-                    if user == '':
-                        user = usr_default
-                else:
-                    user = raw_input("Username (DOMAIN\username or username@domain):")
-                if user:
-                    usr_default = user
-                else:
-                    raise TFError("Authentication credentials were not provided")
-                passwd = getpass.getpass("Password: ")
-                self._tf_auth_cache[workspace] = dict(
-                    user=user,
-                    passwd=passwd,
-                )
-                common.input_lock.release()
-                common.output_lock.release()
+                try:
+                    print "Authorization needed for '%s' at '%s'" % (self.source['name'], self.source['url'])
+                    #Try to get the default username from sources (login argument)
+                    if usr_default=='' and self.source.get('login', ''):
+                        usr_default=self.source['login'].split(",")[0]
+                    if usr_default:
+                        user = raw_input("Username (DOMAIN\username or username@domain) [%s]: "%usr_default)
+                        if user == '':
+                            user = usr_default
+                    else:
+                        user = raw_input("Username (DOMAIN\username or username@domain):")
+                    if user:
+                        usr_default = user
+                    else:
+                        logger.warning( "Authentication credentials were not provided")
+                        raise
+                    passwd = getpass.getpass("Password: ")
+                    self._tf_auth_cache[workspace] = dict(
+                        user=user,
+                        passwd=passwd,
+                    )
+                finally:
+                    common.input_lock.release()
+                    common.output_lock.release()
 
     def _tf_workfold_unmap(self, **kwargs):
         """ Unmapp a local folder.
@@ -155,7 +158,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
             return stdout
 
     def _tf_append_argument(self, args, arg_ids, pos=2):
-        """ Append (if exists) all arguments in the "arg_ids" list 
+        """ Append (if exists) all arguments in the "arg_ids" list
             into args.
         """
         for arg_id in arg_ids:
@@ -218,7 +221,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
             args[2:2] = ["-login:%s,%s"%(auth.get('user',''),auth.get('passwd',''))]
         args[2:2] = ["-noprompt"]
 
-        if self.DB: 
+        if self.DB:
             ret = ' '.join(args)
             logger.debug("    >> %s"%ret.replace(auth and auth.get('passwd','') or 'nothing','<hidden>'))
 
@@ -241,7 +244,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         tf syntax:
         tf properties [/collection:TeamProjectCollectionUrl] [/recursive]
         [/login:username,[password]] itemspec [/version:versionspec] [/workspace]
-        
+
         Return:
 
         """
@@ -249,19 +252,19 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         if name in self._tf_properties_cache:
             return self._tf_properties_cache[name]
         path = self.source['path']
-        
+
         args = [TF, "properties", path]
         self._tf_append_argument(args,['workspace','profile','login'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         result = {}
         if returncode != 0:
             # The is no mappings for this folder
-            if STDOUT_EXP_UNMAPPED in stdout+stderr:
+            if STDOUT_EXP_UNMAPPED_PROPS in stdout+stderr:
                 return result
             else:
                 raise TFError("'tf properties' command for '%s' failed.\n%s" % (name, stderr))
         local, server = self._tf_parse_properties(stdout)
-       
+
         if local:
             if local.get('server path'):
                 result['url'] = local['server path']
@@ -325,7 +328,8 @@ class TFWorkingCopy(common.BaseWorkingCopy):
                 if self.status() == 'clean':
                     return self.tf_switch(**kwargs)
                 else:
-                    raise TFError("Can't switch package '%s' to '%s' because it's dirty." % (name, self.source['url']))
+                    raise TFError("Can't switch package '%s' to '%s' because destination is dirty."
+                                  % (name, self.source['url']))
         else:
             return self._tf_error_wrapper(self.tf_checkout, **kwargs)
 
@@ -354,7 +358,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
             ret = props.get('url') == self.source['url'] and preview_clean
         else:
             # No properties (folder is not mapped)
-            if self.DB: logger.debug(preview_clean and "  It was not possible to check the properties. (tf properties)")
+            if self.DB: logger.debug("  It was not possible to check the properties. (tf properties)")
             ret = False
         if self.DB: logger.debug("matches return: '%s'"%ret)
         return ret
@@ -371,7 +375,11 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
 
         if returncode != 0:
-            raise TFError("'tf status' command for '%s' failed.\n%s" % (name, stderr))
+            # The is no mappings for this folder
+            if STDOUT_EXP_UNMAPPED_STATUS in stdout+stderr:
+                return False, stdout
+            else:
+                raise TFError("'tf status' command for '%s' failed.\n%s" % (name, stderr))
         return STDOUT_EXP_STATUS_OK in stdout, stdout
 
     def status(self, **kwargs):
@@ -398,7 +406,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
                 return self._tf_error_wrapper(self.tf_switch, **kwargs)
             else:
                 raise TFError("It was not possibel to switch '%s' to the new location."
-                              "There are uncommited changes") 
+                              "There are uncommited changes")
         #Update
         return self.tf_update(**kwargs)
 
