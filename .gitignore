@@ -7,3 +7,4 @@ dist/*
 eggs/*
 *.egg-info
 .installed.cfg
+parts
