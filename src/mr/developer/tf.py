@@ -202,7 +202,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
 
         # Get content from server
         # Mapping the local folder
-        args = [self.tf_executable, "get", "-recursive", path]
+        args = [self.tf_executable, "get", "-recursive", "-force", path]
         self._tf_append_argument(args, ['profile', 'login', 'version'])
         logger.debug("  Synchronizing (tf get) with the repository")
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
@@ -291,7 +291,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         name = self.source['name']
         path = self.source['path']
 
-        args = [self.tf_executable, "get", "-recursive", path]
+        args = [self.tf_executable, "get", "-recursive", "-all", path]
         self._tf_append_argument(args, ['profile', 'login', 'version'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
