@@ -38,8 +38,6 @@ STDOUT_EXP_GET_PREVIEW_OK = "All files up to date"
 class TFWorkingCopy(common.BaseWorkingCopy):
     _tf_properties_cache = {}
     _tf_auth_cache = {}
-    #TODO: delete debug information
-    DB = True
 
     _executable_names = ['tf', 'tf.cmd']
 
@@ -162,14 +160,14 @@ class TFWorkingCopy(common.BaseWorkingCopy):
                 args.insert(pos, '-%s:%s' % (arg_id, self.source[arg_id]))
 
     def _tf_workfold(self, **kwargs):
-        """ Mapp a local folder.
+        """ Map a local folder with a server folder.
         """
         name = self.source['name']
         path = self.source['path']
         url = self.source['url']
 
         # Mapping the local folder
-        args = [self.tf_executable, "workfold", url, path]
+        Vargs = [self.tf_executable, "workfold", url, path]
         self._tf_append_argument(args, ['workspace', 'profile', 'login'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
@@ -179,31 +177,34 @@ class TFWorkingCopy(common.BaseWorkingCopy):
             return stdout
 
     def _tf_checkout(self, **kwargs):
-        """ Mapp a local folder and get from server.
+        """ Map a local folder and get from server.
         """
         name = self.source['name']
         path = self.source['path']
         url = self.source['url']
-        if self.DB: logger.debug("  Checking informations (tf properties) from '%s'"
+        logger.debug("  Checking informations (tf properties) from '%s'"
                                  % path)
         info = self._tf_properties(**kwargs)
 
         # Verify the mapping
-        if info.get('url', ''):
-            #There is a mapping already
-            if info['url'] != url:
-                raise TFError("The path '%s' is already mapped to '%s'." %
-                              (path, info['url']))
-        else:
-            if self.DB: logger.debug("  Mapping (tf workfold) '%s' with the repository"
+        if not info.get('url'):
+            logger.debug("  Mapping (tf workfold) '%s' with the repository"
                                      % name)
             self._tf_workfold(**kwargs)
+        # remote and local paths are already mapped
+        elif info.get('url') == 'null':
+            pass
+        # remote and local paths are already mapped
+        # but to a different location
+        elif info['url'] != url:
+                raise TFError("The path '%s' is already mapped to '%s'." %
+                              (path, info['url']))
 
         # Get content from server
         # Mapping the local folder
         args = [self.tf_executable, "get", "-recursive", path]
         self._tf_append_argument(args, ['profile', 'login', 'version'])
-        if self.DB: logger.debug("  Synchronizing (tf get) with the repository")
+        logger.debug("  Synchronizing (tf get) with the repository")
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
             raise TFError("'tf get' command for '%s' failed.\n%s" %
@@ -223,10 +224,10 @@ class TFWorkingCopy(common.BaseWorkingCopy):
                          (auth.get('user', ''), auth.get('passwd', ''))]
         args[2:2] = ["-noprompt"]
 
-        if self.DB:
-            ret = ' '.join(args)
-            logger.debug("    >> %s",
-                         ret.replace(auth and auth.get('passwd', '') or 'nothing', '<hidden>'))
+        ret = ' '.join(args)
+        logger.debug("    >> %s",
+                     ret.replace(auth and auth.get('passwd', '') or 'nothing',
+                                 '<hidden>'))
 
         cmd = subprocess.Popen(args,
                                stdout=subprocess.PIPE,
@@ -307,15 +308,14 @@ class TFWorkingCopy(common.BaseWorkingCopy):
                          "Skipped checkout of existing package '%s'." % name))
             return
         self.output((logger.info,
-                     "Checked out '%s' with Microsoft team foundation." % name)
-                   )
+            "Checked out '%s' from Microsoft Team Foundation Server." % name))
         return self._tf_error_wrapper(self._tf_checkout, **kwargs)
 
     def tf_switch(self, **kwargs):
         """ Remove the mapping with the local folder and map/update it again
         in the new location.
         """
-        if self.DB: logger.debug("  Executing 'switch' (tf workfold 'unmap' and 'map' again).")
+        logger.debug("  Executing 'switch' (tf workfold 'unmap' and 'map' again).")
         self._tf_workfold_unmap(**kwargs)
         return self._tf_checkout(**kwargs)
 
@@ -326,7 +326,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         return self._tf_error_wrapper(self._tf_update, **kwargs)
 
     def checkout(self, **kwargs):
-        if self.DB: logger.debug("Executing checkout.")
+        logger.debug("Executing checkout.")
         name = self.source['name']
         path = self.source['path']
         update = self.should_update(**kwargs)
@@ -367,19 +367,19 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         return STDOUT_EXP_GET_PREVIEW_OK in stdout
 
     def matches(self, **kwargs):
-        if self.DB: logger.debug("Executing matches.")
+        logger.debug("Executing matches.")
         props = self._tf_error_wrapper(self._tf_properties, **kwargs)
         if props:
             preview_clean = self._tf_error_wrapper(self._tf_preview_clean,
                                                    **kwargs)
-            if self.DB: logger.debug(preview_clean and "  The 'URL' matches with repository (checked with: tf properties)" or "  The 'URL' do NOT match with repository (checked with: tf properties)")
-            if self.DB: logger.debug(preview_clean and "  The files are updated (checked with: tf get -preview)" or "  The files are NOT updated (checked with: tf get -preview)")
+            logger.debug(preview_clean and "  The 'URL' matches with repository (checked with: tf properties)" or "  The 'URL' do NOT match with repository (checked with: tf properties)")
+            logger.debug(preview_clean and "  The files are updated (checked with: tf get -preview)" or "  The files are NOT updated (checked with: tf get -preview)")
             ret = props.get('url') == self.source['url'] and preview_clean
         else:
             # No properties (folder is not mapped)
-            if self.DB: logger.debug("  It was not possible to check the properties. (tf properties)")
+            logger.debug("  It was not possible to check the properties. (tf properties)")
             ret = False
-        if self.DB: logger.debug("matches return: '%s'" % ret)
+        logger.debug("matches return: '%s'" % ret)
         return ret
 
     def _tf_status_clean(self, **kwargs):
@@ -403,21 +403,21 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         return STDOUT_EXP_STATUS_OK in stdout, stdout
 
     def status(self, **kwargs):
-        if self.DB: logger.debug("Executing status.")
+        logger.debug("Executing status.")
         clean, stdout = self._tf_error_wrapper(self._tf_status_clean, **kwargs)
 
         if clean:
             status = 'clean'
         else:
             status = 'dirty'
-        if self.DB: logger.debug("status return: %s.", status)
+        logger.debug("status return: %s.", status)
         if kwargs.get('verbose', False):
             return status, stdout
         else:
             return status
 
     def update(self, **kwargs):
-        if self.DB: logger.debug("Executing update")
+        logger.debug("Executing update")
         force = kwargs.get('force', False)
         status = self.status()
         #Switch
