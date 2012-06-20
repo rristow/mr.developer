@@ -1,16 +1,10 @@
 from mr.developer import common
-import platform
 import getpass
 import os
 import subprocess
 import sys
 
 logger = common.logger
-
-if 'Windows' in platform.system() or 'Microsoft' in platform.system():
-    TF = 'tf.cmd'
-else:
-    TF = 'tf'
 
 
 class TFError(common.WCError):
@@ -47,9 +41,14 @@ class TFWorkingCopy(common.BaseWorkingCopy):
     #TODO: delete debug information
     DB = True
 
+    _executable_names = ['tf', 'tf.cmd']
+
     def __init__(self, *args, **kwargs):
         common.BaseWorkingCopy.__init__(self, *args, **kwargs)
-        self._tf_check_executable()
+        self.tf_executable = common.which(*self._executable_names)
+        if self.tf_executable is None:
+            logger.error("Cannot find tf executable in PATH")
+            sys.exit(1)
 
     def _tf_parse_properties(self, str):
         """ parse the result of the command 'properties'.
@@ -83,17 +82,6 @@ class TFWorkingCopy(common.BaseWorkingCopy):
                 raise TFParserError("Expected 'Local information:'")
         else:
             raise TFParserError("Expected 'Server information:'")
-
-    def _tf_check_executable(self):
-        try:
-            subprocess.Popen([TF, "-h"],
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
-        except OSError, e:
-            if getattr(e, 'errno', None) == 2:
-                logger.error("Couldn't find '%s' executable on your PATH.", TF)
-                sys.exit(1)
-            raise
 
     def _tf_auth_get(self, workspace):
         """ Get the credentials from local/temporary cache.
@@ -156,7 +144,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         path = self.source['path']
 
         # Mapping the local folder
-        args = [TF, "workfold", "-unmap", path]
+        args = [self.tf_executable, "workfold", "-unmap", path]
         self._tf_append_argument(args, ['workspace', 'profile', 'login'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
@@ -181,7 +169,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         url = self.source['url']
 
         # Mapping the local folder
-        args = [TF, "workfold", url, path]
+        args = [self.tf_executable, "workfold", url, path]
         self._tf_append_argument(args, ['workspace', 'profile', 'login'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
@@ -213,7 +201,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
 
         # Get content from server
         # Mapping the local folder
-        args = [TF, "get", "-recursive", path]
+        args = [self.tf_executable, "get", "-recursive", path]
         self._tf_append_argument(args, ['profile', 'login', 'version'])
         if self.DB: logger.debug("  Synchronizing (tf get) with the repository")
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
@@ -270,7 +258,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
             return self._tf_properties_cache[name]
         path = self.source['path']
 
-        args = [TF, "properties", path]
+        args = [self.tf_executable, "properties", path]
         self._tf_append_argument(args, ['workspace', 'profile', 'login'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         result = {}
@@ -302,7 +290,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         name = self.source['name']
         path = self.source['path']
 
-        args = [TF, "get", "-recursive", path]
+        args = [self.tf_executable, "get", "-recursive", path]
         self._tf_append_argument(args, ['profile', 'login', 'version'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
@@ -370,7 +358,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         path = self.source['path']
 
         # get from server
-        args = [TF, "get", "-preview", "-recursive", path]
+        args = [self.tf_executable, "get", "-preview", "-recursive", path]
         self._tf_append_argument(args, ['profile', 'login', 'version'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
@@ -401,7 +389,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         name = self.source['name']
         path = self.source['path']
 
-        args = [TF, "status", "-recursive", path]
+        args = [self.tf_executable, "status", "-recursive", path]
         self._tf_append_argument(args, ['workspace', 'profile', 'login'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
 
