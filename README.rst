@@ -63,7 +63,8 @@ Where individual parts are:
 
 ``kind``
   The kind of repository. Currently supported are ``svn``,
-  ``hg``, ``git``, ``bzr``, ``darcs``, ``cvs``, ``tf`` or ``fs``.
+  ``hg``, ``git``, ``bzr``, ``darcs``, ``cvs``, ``tf`` (Team Foundation Server)
+  or ``fs``.
 
 ``url``
   The location of the repository. This value is specific to the version
@@ -142,6 +143,11 @@ Common options
   deactivate packages, but you don't get status info and can't update etc.
 
   The ``url`` needs to be the same as the ``name`` of the package.
+
+``tf``
+  With the ``workspace`` option you can set the workspace which is used
+  for VC interaction.
+  The ``profile`` option allows to specify a user profile.
 
 Here's an example of how your ``buildout.cfg`` may look like::
 

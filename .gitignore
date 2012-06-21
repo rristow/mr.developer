@@ -7,3 +7,5 @@ dist/*
 eggs/*
 *.egg-info
 .installed.cfg
+parts
+.mr.developer.cfg
