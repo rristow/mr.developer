@@ -38,8 +38,7 @@ STDOUT_EXP_GET_PREVIEW_OK = "All files up to date"
 class TFWorkingCopy(common.BaseWorkingCopy):
     _tf_properties_cache = {}
     _tf_auth_cache = {}
-
-    _executable_names = ['tf', 'tf.cmd']
+    _executable_names = ['tf.cmd', 'tf']
 
     def __init__(self, *args, **kwargs):
         common.BaseWorkingCopy.__init__(self, *args, **kwargs)
