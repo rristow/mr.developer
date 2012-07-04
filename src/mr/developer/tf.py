@@ -61,6 +61,8 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         """
         local = {}
         server = {}
+        if str.startswith('No items match'):
+            return local, server
         if 'Server information:' in str:
             locstr, servstr = str.split('Server information:')
             if 'Local information:' in locstr:
@@ -166,7 +168,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         url = self.source['url']
 
         # Mapping the local folder
-        Vargs = [self.tf_executable, "workfold", url, path]
+        args = [self.tf_executable, "workfold", url, path]
         self._tf_append_argument(args, ['workspace', 'profile', 'login'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
@@ -196,8 +198,9 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         # remote and local paths are already mapped
         # but to a different location
         elif info['url'] != url:
-                raise TFError("The path '%s' is already mapped to '%s'." %
-                              (path, info['url']))
+                raise TFError("The path '%s' can not be mapped to '%s' because "
+                              "it is already mapped to '%s'." %
+                              (path, url, info['url']))
 
         # Get content from server
         # Mapping the local folder
@@ -307,7 +310,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
                          "Skipped checkout of existing package '%s'." % name))
             return
         self.output((logger.info,
-            "Checked out '%s' from Microsoft Team Foundation Server." % name))
+            "Checking out '%s' from Microsoft Team Foundation Server." % name))
         return self._tf_error_wrapper(self._tf_checkout, **kwargs)
 
     def tf_switch(self, **kwargs):
@@ -328,10 +331,10 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         logger.debug("Executing checkout.")
         name = self.source['name']
         path = self.source['path']
-        update = self.should_update(**kwargs)
         if os.path.exists(path):
             matches = self.matches()
             if matches:
+                update = self.should_update(**kwargs)
                 if update:
                     self.update(**kwargs)
                 else:
@@ -349,36 +352,21 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         else:
             return self._tf_error_wrapper(self.tf_checkout, **kwargs)
 
-    def _tf_preview_clean(self, **kwargs):
-        """
-        Check/preview changes from local folder.
-        """
-        name = self.source['name']
-        path = self.source['path']
-
-        # get from server
-        args = [self.tf_executable, "get", "-preview", "-recursive", path]
-        self._tf_append_argument(args, ['profile', 'login', 'version'])
-        stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
-        if returncode != 0:
-            raise TFError("'tf get -preview' command for '%s' failed.\n%s" %
-                          (name, stderr))
-        return STDOUT_EXP_GET_PREVIEW_OK in stdout
-
     def matches(self, **kwargs):
-        logger.debug("Executing matches.")
+        """ Check if the mapping matches 
+        """
+        logger.debug("%s: Executing matches."%(self.source['name']))
         props = self._tf_error_wrapper(self._tf_properties, **kwargs)
         if props:
-            preview_clean = self._tf_error_wrapper(self._tf_preview_clean,
-                                                   **kwargs)
-            logger.debug(preview_clean and "  The 'URL' matches with repository (checked with: tf properties)" or "  The 'URL' do NOT match with repository (checked with: tf properties)")
-            logger.debug(preview_clean and "  The files are updated (checked with: tf get -preview)" or "  The files are NOT updated (checked with: tf get -preview)")
-            ret = props.get('url') == self.source['url'] and preview_clean
+            ret = props.get('url') == self.source['url']
+            logger.debug("  %s: The actual mapping '%s' do not match with '%s'"%
+                         (self.source['name'], props.get('url'), 
+                          self.source['url']))
         else:
             # No properties (folder is not mapped)
-            logger.debug("  It was not possible to check the properties. (tf properties)")
+            logger.debug("  %s: It was not possible to check the properties."%
+                         (self.source['name']))
             ret = False
-        logger.debug("matches return: '%s'" % ret)
         return ret
 
     def _tf_status_clean(self, **kwargs):
@@ -424,8 +412,8 @@ class TFWorkingCopy(common.BaseWorkingCopy):
             if force or status == 'clean':
                 return self._tf_error_wrapper(self.tf_switch, **kwargs)
             else:
-                raise TFError("It was not possibel to switch '%s' to the new "
-                              "location. There are uncommited changes")
+                raise TFError("It was not possible to switch '%s' to '%s' "
+                              "because the destination is dirty.")
         #Update
         return self.tf_update(**kwargs)
 
