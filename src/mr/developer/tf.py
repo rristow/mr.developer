@@ -123,7 +123,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
                     continue
                 try:
                     print ("Authorization needed for '%s' at '%s'" %
-                                     (self.source['name'], self.source['url'])
+                                     (self.source['name'], self.source['url']))
                     #Try to get the default username from sources
                     #(login argument)
                     if not usr_default and self.source.get('login', ''):

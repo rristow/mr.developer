@@ -1,7 +1,7 @@
 from setuptools import setup
 import os, sys
 
-version = '1.22_FHNW2'
+version = '1.22-FHNW2'
 
 install_requires = [
   'setuptools',
