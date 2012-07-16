@@ -48,7 +48,6 @@ class TFWorkingCopy(common.BaseWorkingCopy):
     def tf_print(self, log_func, msg):
         """ Print 'source name' and a message in the output
         """
-<<<<<<< HEAD
         name = self.source.get('name','')
         self.output((log_func, "(%s) %s"%(name, msg)))
 
@@ -61,20 +60,6 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         """
         name = self.source.get('name','')
         log_func(("(%s) "%name)+msg, *args)
-=======
-        local = {}
-        server = {}
-        if str.startswith('No items match'):
-            return local, server
-        if 'Server information:' in str:
-            locstr, servstr = str.split('Server information:')
-            if 'Local information:' in locstr:
-                locstr = locstr.split('Local information:')[1]
-                for info in locstr.split("\n"):
-                    if ":" in info:
-                        str = info.split(":")
-                        local[str[0].strip().lower()] = str[1].strip()
->>>>>>> d4cbbf819ad6c70b70df68b875446f40972d1609
 
     def _tf_append_argument(self, args, arg_ids, pos=2):
         """ Append (if exists) all arguments in the "arg_ids" list
@@ -208,10 +193,6 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         path = self.source['path']
         url = self.source['url']
 
-<<<<<<< HEAD
-=======
-        # Mapping the local folder
->>>>>>> d4cbbf819ad6c70b70df68b875446f40972d1609
         args = [self.tf_executable, "workfold", url, path]
         self._tf_append_argument(args, ['workspace', 'profile', 'login'])
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
@@ -226,37 +207,9 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         """
         name = self.source['name']
         path = self.source['path']
-<<<<<<< HEAD
 
         args = [self.tf_executable, "workfold", "-unmap", path]
         self._tf_append_argument(args, ['workspace', 'profile', 'login'])
-=======
-        url = self.source['url']
-        logger.debug("  Checking informations (tf properties) from '%s'"
-                                 % path)
-        info = self._tf_properties(**kwargs)
-
-        # Verify the mapping
-        if not info.get('url'):
-            logger.debug("  Mapping (tf workfold) '%s' with the repository"
-                                     % name)
-            self._tf_workfold(**kwargs)
-        # remote and local paths are already mapped
-        elif info.get('url') == 'null':
-            pass
-        # remote and local paths are already mapped
-        # but to a different location
-        elif info['url'] != url:
-                raise TFError("The path '%s' can not be mapped to '%s' because "
-                              "it is already mapped to '%s'." %
-                              (path, url, info['url']))
-
-        # Get content from server
-        # Mapping the local folder
-        args = [self.tf_executable, "get", "-recursive", "-force", path]
-        self._tf_append_argument(args, ['profile', 'login', 'version'])
-        logger.debug("  Synchronizing (tf get) with the repository")
->>>>>>> d4cbbf819ad6c70b70df68b875446f40972d1609
         stdout, stderr, returncode = self._tf_communicate(args, **kwargs)
         if returncode != 0:
             raise TFError("'tf workfold -unmap' command for '%s' failed.\n%s" %
@@ -345,7 +298,6 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         if kwargs.get('verbose', False):
             return stdout
 
-<<<<<<< HEAD
     def _tf_get_force(self, **kwargs):
         """ Get files from server with the 'force' option. All local
         changes will be lost.
@@ -369,74 +321,6 @@ class TFWorkingCopy(common.BaseWorkingCopy):
         self.tf_log(logger.debug, "Executing 'switch' (tf workfold unmap/map).")
         self.tf_workfold_unmap(**kwargs)
         return self.tf_workfold_map(**kwargs)
-=======
-    def tf_checkout(self, **kwargs):
-        name = self.source['name']
-        path = self.source['path']
-        if os.path.exists(path):
-            self.output((logger.info,
-                         "Skipped checkout of existing package '%s'." % name))
-            return
-        self.output((logger.info,
-            "Checking out '%s' from Microsoft Team Foundation Server." % name))
-        return self._tf_error_wrapper(self._tf_checkout, **kwargs)
-
-    def tf_switch(self, **kwargs):
-        """ Remove the mapping with the local folder and map/update it again
-        in the new location.
-        """
-        logger.debug("  Executing 'switch' (tf workfold 'unmap' and 'map' again).")
-        self._tf_workfold_unmap(**kwargs)
-        return self._tf_checkout(**kwargs)
-
-    def tf_update(self, **kwargs):
-        name = self.source['name']
-        self.output((logger.info,
-            "Updated '%s' from Microsoft Team Foundation Server." % name))
-        return self._tf_error_wrapper(self._tf_update, **kwargs)
-
-    def checkout(self, **kwargs):
-        logger.debug("Executing checkout.")
-        name = self.source['name']
-        path = self.source['path']
-        if os.path.exists(path):
-            matches = self.matches()
-            if matches:
-                update = self.should_update(**kwargs)
-                if update:
-                    self.update(**kwargs)
-                else:
-                    self.output(
-                        (logger.info,
-                         "Skipped checkout of existing package '%s'." % name))
-            else:
-                if self.status() == 'clean':
-                    return self.tf_switch(**kwargs)
-                else:
-                    raise TFError(
-                        ("Can't switch package '%s' to '%s' because "
-                         "destination is dirty.") %
-                        (name, self.source['url']))
-        else:
-            return self._tf_error_wrapper(self.tf_checkout, **kwargs)
-
-    def matches(self, **kwargs):
-        """ Check if the mapping matches 
-        """
-        logger.debug("%s: Executing matches."%(self.source['name']))
-        props = self._tf_error_wrapper(self._tf_properties, **kwargs)
-        if props:
-            ret = props.get('url') == self.source['url']
-            logger.debug("  %s: The actual mapping '%s' do not match with '%s'"%
-                         (self.source['name'], props.get('url'), 
-                          self.source['url']))
-        else:
-            # No properties (folder is not mapped)
-            logger.debug("  %s: It was not possible to check the properties."%
-                         (self.source['name']))
-            ret = False
-        return ret
->>>>>>> d4cbbf819ad6c70b70df68b875446f40972d1609
 
     def _tf_status_clean(self, **kwargs):
         """
