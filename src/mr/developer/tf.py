@@ -6,6 +6,8 @@ import sys
 
 logger = common.logger
 
+print "---mr.developer from sources---"
+
 class TFError(common.WCError):
     pass
 
@@ -280,8 +282,7 @@ class TFWorkingCopy(common.BaseWorkingCopy):
                 raise TFParserError(
                     "expected 'server path' (tf properties)")
         else:
-            raise TFParserError(
-                "expected 'Server information' (tf properties)")
+            return False, result
 
     def _tf_get(self, **kwargs):
         """ Get files from server. The checked-out files will not be changed.
